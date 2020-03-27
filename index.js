@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 
-class Token {
+class Tokener {
 
   constructor(options) {
     const { secret, timeStep } = options;
@@ -69,4 +69,4 @@ class Token {
   };
 }
 
-module.exports = Token;
+module.exports = Tokener;
