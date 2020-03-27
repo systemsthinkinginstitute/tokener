@@ -1,60 +1,72 @@
-var crypto = require('crypto');
+const crypto = require('crypto');
 
-var d = exports.defaults = {
-  cache: true
-};
+class Token {
 
-var items = {};
-
-function cache(key) {
-  if(!items[key] || !d.cache) {
-    if(Object.keys(items).length > 500) {
-      items = {};
+  constructor(options) {
+    const { secret, timeStep } = options;
+    if (!secret) throw new Error('secret is required');
+    if (!timeStep) throw new Error('timeStep is required');
+    if ('cache' in options) {
+      this.caching = options.cache;
+    } else {
+      this.caching = true;
     }
-    items[key] = crypto.createHmac('sha512', d.secret).update(key).digest('base64');
+    this.secret = secret;
+    this.timeStep = timeStep;
+    this.items = {};
+    this.INVALID = 0;
+    this.VALID = 1;
+    this.EXPIRING = 2;
   }
-  return items[key];
+
+  cache(key) {
+    if(!this.items[key] || !this.caching) {
+      if(Object.keys(this.items).length > 500) {
+        this.items = {};
+      }
+      this.items[key] = crypto.createHmac('sha512', this.secret).update(key).digest('base64');
+    }
+    return this.items[key];
+  }
+
+  verify(data, hash) {
+    if(typeof data !== 'string' || typeof hash !== 'string' ) {
+      return false;
+    }
+    var epoch = Math.floor(new Date().getTime() / 1000 / this.timeStep); // e.g. http://tools.ietf.org/html/rfc6238
+    // allow data to be empty, always take into account the time
+    if (hash === this.cache(data + epoch) || hash === this.cache(data + (epoch + 1))) {
+      return this.VALID; // truthy, valid and current
+    }
+    if (hash === this.cache(data + (epoch - 1))) {
+      return this.EXPIRING; // truthy, expired but still valid
+    }
+    return this.INVALID;
+  };
+
+  generate(data, opts) {
+    if(typeof data !== 'string') {
+      return false;
+    }
+    var now = opts && opts.now || (new Date().getTime()),
+        ts = opts && opts.timeStep || this.timeStep,
+        secret =  opts && opts.secret || this.secret,
+        epoch = Math.floor(now / 1000 / ts); // e.g. http://tools.ietf.org/html/rfc6238
+    return crypto.createHmac('sha512', secret).update(data + epoch).digest('base64');
+  };
+
+  invalidate(data, hash) {
+    var isValidHash = this.verify(data, hash),
+      epoch = Math.floor(new Date().getTime() / 1000 / this.timeStep);
+
+    if (!isValidHash) {
+      throw 'invalid hash';
+    } else {
+      this.items[hash + epoch] = null;
+    }
+
+    return true;
+  };
 }
 
-exports.INVALID = 0;
-exports.VALID = 1;
-exports.EXPIRING = 2;
-
-exports.verify = function(data, hash) {
-  if(typeof data !== 'string' || typeof hash !== 'string' ) {
-    return false;
-  }
-  var epoch = Math.floor(new Date().getTime() / 1000 / d.timeStep); // e.g. http://tools.ietf.org/html/rfc6238
-  // allow data to be empty, always take into account the time
-  if (hash === cache(data + epoch) || hash === cache(data + (epoch + 1))) {
-    return exports.VALID; // truthy, valid and current
-  }
-  if (hash === cache(data + (epoch - 1))) {
-    return exports.EXPIRING; // truthy, expired but still valid
-  }
-  return exports.INVALID;
-};
-
-exports.generate = function(data, opts) {
-  if(typeof data !== 'string') {
-    return false;
-  }
-  var now = opts && opts.now || (new Date().getTime()),
-      ts = opts && opts.timeStep || d.timeStep,
-      secret =  opts && opts.secret || d.secret,
-      epoch = Math.floor(now / 1000 / ts); // e.g. http://tools.ietf.org/html/rfc6238
-  return crypto.createHmac('sha512', secret).update(data + epoch).digest('base64');
-};
-
-exports.invalidate = function(data, hash) {
-  var isValidHash = exports.verify(data, hash),
-    epoch = Math.floor(new Date().getTime() / 1000 / d.timeStep);
-
-  if (!isValidHash) {
-    throw 'invalid hash';
-  } else {
-    items[hash + epoch] = null;
-  }
-
-  return true;
-};
+module.exports = Token;
