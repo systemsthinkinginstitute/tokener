@@ -1,6 +1,6 @@
 {
   "name": "tokener",
-  "version": "2",
+  "version": "2.0.1",
   "description": "HMAC token generation and verification with time-based limitation on validity",
   "author": "Mikito Takada <mikito.takada@gmail.com>",
   "main": "index.js",
