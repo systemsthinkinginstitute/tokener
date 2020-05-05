@@ -1,11 +1,13 @@
 const crypto = require('crypto');
+const base62 = require('base62/lib/ascii');
 
 class Tokener {
 
   constructor(options) {
-    const { secret, timeStep } = options;
+    const { secret, timeStep, digestBase=64 } = options;
     if (!secret) throw new Error('secret is required');
     if (!timeStep) throw new Error('timeStep is required');
+    if (![64, 62].includes(digestBase)) throw new Error(`invalid digestBase: ${digestBase}`);
     if ('cache' in options) {
       this.caching = options.cache;
     } else {
@@ -13,6 +15,7 @@ class Tokener {
     }
     this.secret = secret;
     this.timeStep = timeStep;
+    this.digestBase = digestBase;
     this.items = {};
     this.INVALID = 0;
     this.VALID = 1;
@@ -24,7 +27,8 @@ class Tokener {
       if(Object.keys(this.items).length > 500) {
         this.items = {};
       }
-      this.items[key] = crypto.createHmac('sha512', this.secret).update(key).digest('base64');
+      const hmac = crypto.createHmac('sha512', this.secret).update(key);
+      this.items[key] = this.digestBase === 62 ? this.base62EncodeDigest(hmac.digest()) : hmac.digest('base64');
     }
     return this.items[key];
   }
@@ -52,7 +56,8 @@ class Tokener {
         ts = opts && opts.timeStep || this.timeStep,
         secret =  opts && opts.secret || this.secret,
         epoch = Math.floor(now / 1000 / ts); // e.g. http://tools.ietf.org/html/rfc6238
-    return crypto.createHmac('sha512', secret).update(data + epoch).digest('base64');
+    const hmac = crypto.createHmac('sha512', this.secret).update(data + epoch);
+    return this.digestBase === 62 ? this.base62EncodeDigest(hmac.digest()) : hmac.digest('base64');
   };
 
   invalidate(data, hash) {
@@ -67,6 +72,14 @@ class Tokener {
 
     return true;
   };
+
+  base62EncodeDigest(buffer) {
+    let encoded = '';
+    for (let i = 0; i < buffer.length; i++) {
+      encoded += base62.encode(buffer[i]);
+    }
+    return encoded;
+  }
 }
 
 module.exports = Tokener;

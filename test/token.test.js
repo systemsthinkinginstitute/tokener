@@ -16,3 +16,8 @@ assert(token2.verify('bard', t2) === 0);
 assert(token1.verify('foo', t1) === 1);
 assert(token1.verify('food', t1) === 0);
 
+const token3 = new Tokener({ secret: 'EFF', timeStep: 30 * 60, digestBase: 62 });
+const t3 = token3.generate('baz');
+assert(token3.verify('baz', t3) === 1);
+assert(token3.verify('bazz', t3) === 0);
+
